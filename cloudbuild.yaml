@@ -1,22 +1,44 @@
 steps:
-  - name: gcr.io/cloud-builders/docker
-    args:
-      ["build", "-t", "gcr.io/$PROJECT_ID/${_ENV}:${SHORT_SHA}", "-t", "gcr.io/$PROJECT_ID/Sample-${_ENV}:${$TAG_NAME}", "."]
+# build image:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '--tag'
+  - '${_IMAGE_NAME}:$SHORT_SHA'
+  - '--tag'
+  - '${_IMAGE_NAME}:latest'
+  - '.'
+#start the container for sanity check
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'run'
+  - '-d'
+  - '--name'
+  - 'sanity-check'
+  - '${_IMAGE_NAME}:$SHORT_SHA'
 
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "gcr.io/$PROJECT_ID/${_ENV}"]:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    sleep 10
+    if docker exec sanity-check pgrep -f "gunicorn" >/dev/null; then
+      echo "Cont & server started"
+    else
+      echo "Sanity check failed"
+      exit 1
+    fi
 
-  - name: "gcr.io/cloud-builders/gcloud"
+- name: 'gcr.io/cloud-builders/docker'
     args:
-      [
-        "run",
-        "deploy",
-        "Sample-${_ENV}",
-        "--image",
-        "gcr.io/$PROJECT_ID/${_ENV}:${SHORT_SHA}",
-        "--region",
-        "europe-west1",
-        "--platform",
-        "managed",
-        "--allow-unauthenticated",
-      ]
+  - 'rm'
+  - '-f'
+  - 'sanity-check'
+
+
+# push image:
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', '--all-tags', '${_IMAGE_NAME}']
+# substitute long name:
+
